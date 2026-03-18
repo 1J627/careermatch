@@ -1,66 +1,78 @@
 from pathlib import Path
+
 from langchain_core.prompts import PromptTemplate
-from app.services.embeddings import get_llm
-from app.services.retriever import get_interview_retriever, build_retrieval_query
-from app.schemas.interview import InterviewQuestionSet
-from app.schemas.user_profile import UserProfile
+from langchain_openai import ChatOpenAI
+
+from app.config import settings
+from app.schemas.interview import (
+    InterviewQuestion,
+    QuestionGenerateRequest,
+    QuestionGenerateResponse,
+)
+from app.services.retriever import retrieve_context, docs_to_context_text
 
 
-PROMPT_PATH = Path("./app/prompts/question_prompt.txt")
+PROMPT_PATH = Path("app/prompts/question_prompt.txt")
 
 
-def format_user_profile(user: UserProfile) -> str:
+def _format_user_profile_text(request: QuestionGenerateRequest) -> str:
+    profile = request.user_profile
     project_lines = []
-    for p in user.projects:
+
+    for p in profile.projects:
         project_lines.append(
-            f"- 프로젝트명: {p.title}\n"
-            f"  역할: {p.role}\n"
-            f"  기술스택: {', '.join(p.tech_stack)}\n"
+            f"- 프로젝트명: {p.name}\n"
             f"  설명: {p.description}\n"
-            f"  성과: {', '.join(p.achievements)}"
+            f"  기술스택: {', '.join(p.tech_stack) if p.tech_stack else '없음'}\n"
+            f"  역할: {p.role or '미기재'}\n"
+            f"  성과: {', '.join(p.achievements) if p.achievements else '없음'}"
         )
 
     return (
-        f"이름: {user.name}\n"
-        f"희망직무: {user.desired_role}\n"
-        f"보유기술: {', '.join(user.skills)}\n"
-        f"포트폴리오 요약: {user.portfolio_summary}\n"
-        f"프로젝트:\n" + "\n".join(project_lines)
+        f"이름: {profile.name or '미기재'}\n"
+        f"희망직무: {profile.target_role or '미기재'}\n"
+        f"기술스택: {', '.join(profile.skills) if profile.skills else '없음'}\n"
+        f"경험요약: {profile.experience_summary or '미기재'}\n"
+        f"프로젝트:\n" + ("\n".join(project_lines) if project_lines else "- 없음")
     )
 
 
-def generate_interview_questions(
-    company_name: str,
-    role_name: str,
-    job_description: str,
-    user: UserProfile,
-) -> InterviewQuestionSet:
-    retriever = get_interview_retriever(k=6)
-    retrieval_query = build_retrieval_query(company_name, role_name, job_description)
-    docs = retriever.invoke(retrieval_query)
-
-    retrieved_context = "\n\n".join(
-        [f"[출처: {doc.metadata.get('filename', 'unknown')}]\n{doc.page_content}" for doc in docs]
+def generate_questions(request: QuestionGenerateRequest) -> QuestionGenerateResponse:
+    retrieval_query = (
+        f"company={request.company_name}, role={request.role_name}, "
+        f"jd={request.job_description}, skills={','.join(request.user_profile.skills)}"
     )
+
+    docs = retrieve_context(retrieval_query)
+    retrieved_context = docs_to_context_text(docs)
 
     prompt_text = PROMPT_PATH.read_text(encoding="utf-8")
     prompt = PromptTemplate.from_template(prompt_text)
 
-    llm = get_llm(temperature=0.2)
+    llm = ChatOpenAI(
+        model=settings.openai_model,
+        api_key=settings.openai_api_key,
+        temperature=0.3,
+    )
 
-    structured_llm = llm.with_structured_output(InterviewQuestionSet)
+    structured_llm = llm.with_structured_output(QuestionGenerateResponse)
 
     chain = prompt | structured_llm
 
-    result = chain.invoke(
-        {
-            "job_description": job_description,
-            "user_profile": format_user_profile(user),
-            "retrieved_context": retrieved_context,
-        }
-    )
+    response = chain.invoke({
+        "company_name": request.company_name,
+        "role_name": request.role_name,
+        "job_description": request.job_description,
+        "user_profile_text": _format_user_profile_text(request),
+        "retrieved_context": retrieved_context,
+    })
 
-    # 스키마에 company/role이 비어 나올 수 있으므로 보정
-    result.company_name = company_name
-    result.role_name = role_name
-    return result
+    # 모델이 company_name/role_name을 누락하거나 틀릴 가능성 방어
+    response.company_name = request.company_name
+    response.role_name = request.role_name
+
+    # 질문 수 보정
+    if len(response.questions) > 6:
+        response.questions = response.questions[:6]
+
+    return response

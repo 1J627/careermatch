@@ -1,42 +1,39 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from app.schemas.user_profile import UserProfile
-from app.services.question_chain import generate_interview_questions
-from app.services.answer_chain import generate_answer_draft
+from fastapi import APIRouter, HTTPException
+
+from app.schemas.interview import (
+    AnswerGenerateRequest,
+    AnswerGenerateResponse,
+    QuestionGenerateRequest,
+    QuestionGenerateResponse,
+)
+from app.services.answer_chain import generate_answer
+from app.services.ingest_service import rebuild_vector_index
+from app.services.question_chain import generate_questions
+
+router = APIRouter(prefix="/interview", tags=["interview"])
 
 
-router = APIRouter(prefix="/api/v1/interviews", tags=["interviews"])
+@router.post("/ingest/rebuild")
+def rebuild_index():
+    try:
+        return rebuild_vector_index()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-class QuestionGenerateRequest(BaseModel):
-    company_name: str
-    role_name: str
-    job_description: str
-    user_profile: UserProfile
+@router.post("/questions/generate", response_model=QuestionGenerateResponse)
+def questions_generate(payload: QuestionGenerateRequest):
+    try:
+        return generate_questions(payload)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"질문 생성 실패: {str(e)}")
 
 
-class AnswerGenerateRequest(BaseModel):
-    question_text: str
-    job_description: str
-    user_profile: UserProfile
-
-
-@router.post("/questions/generate")
-def generate_questions(req: QuestionGenerateRequest):
-    result = generate_interview_questions(
-        company_name=req.company_name,
-        role_name=req.role_name,
-        job_description=req.job_description,
-        user=req.user_profile,
-    )
-    return result.model_dump()
-
-
-@router.post("/answers/generate")
-def generate_answer(req: AnswerGenerateRequest):
-    result = generate_answer_draft(
-        question_text=req.question_text,
-        job_description=req.job_description,
-        user=req.user_profile,
-    )
-    return result.model_dump()
+@router.post("/answers/generate", response_model=AnswerGenerateResponse)
+def answers_generate(payload: AnswerGenerateRequest):
+    try:
+        return generate_answer(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"답변 생성 실패: {str(e)}")

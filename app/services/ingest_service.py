@@ -1,39 +1,64 @@
+import os
 from pathlib import Path
+from typing import List
+
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.services.vectorstore import build_faiss_index
+
+from app.config import settings
+from app.services.vectorstore import save_vectorstore
 
 
-DATA_DIR = Path("./data/interview_corpus")
+def load_corpus_documents() -> List[Document]:
+    corpus_path = Path(settings.corpus_dir)
 
+    if not corpus_path.exists():
+        raise FileNotFoundError(f"코퍼스 디렉토리가 없습니다: {settings.corpus_dir}")
 
-def load_text_documents() -> list[Document]:
-    docs: list[Document] = []
+    documents: List[Document] = []
 
-    for file_path in DATA_DIR.glob("*.txt"):
-        text = file_path.read_text(encoding="utf-8")
-        docs.append(
-            Document(
-                page_content=text,
-                metadata={
-                    "source": str(file_path),
-                    "filename": file_path.name,
-                },
+    for file_path in corpus_path.glob("*.txt"):
+        text = file_path.read_text(encoding="utf-8").strip()
+        if not text:
+            continue
+
+        chunks = split_text(text, chunk_size=800, overlap=100)
+
+        for idx, chunk in enumerate(chunks):
+            documents.append(
+                Document(
+                    page_content=chunk,
+                    metadata={
+                        "source": str(file_path.name),
+                        "chunk_index": idx
+                    }
+                )
             )
-        )
-    return docs
+
+    return documents
 
 
-def chunk_documents(documents: list[Document]) -> list[Document]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=120,
-    )
-    return splitter.split_documents(documents)
+def split_text(text: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
+    chunks = []
+    start = 0
+    text_len = len(text)
+
+    while start < text_len:
+        end = min(start + chunk_size, text_len)
+        chunks.append(text[start:end])
+        if end == text_len:
+            break
+        start = max(0, end - overlap)
+
+    return chunks
 
 
-def run_ingest() -> None:
-    raw_docs = load_text_documents()
-    chunked_docs = chunk_documents(raw_docs)
-    build_faiss_index(chunked_docs)
-    print(f"인덱싱 완료: {len(chunked_docs)}개 청크")
+def rebuild_vector_index() -> dict:
+    documents = load_corpus_documents()
+    save_vectorstore(documents)
+
+    return {
+        "message": "FAISS 인덱스 재생성 완료",
+        "document_count": len(documents),
+        "corpus_dir": settings.corpus_dir,
+        "index_dir": settings.faiss_index_dir,
+    }
