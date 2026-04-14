@@ -1,309 +1,703 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
+const API_BASE = "http://localhost:8000";
 
 const styles = `
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+  * { box-sizing: border-box; }
+
   :root {
-    --brand: #2563EB; --brand-light: #EFF6FF; --brand-dark: #1E3A8A;
-    --accent: #10B981; --surface: #F8FAFC; --border: rgba(15,23,42,0.08); --white: #fff;
+    --bg: #f8fafc;
+    --panel: rgba(255,255,255,0.88);
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: rgba(15, 23, 42, 0.08);
+    --soft: #f1f5f9;
+    --soft-blue: rgba(37,99,235,0.08);
+    --brand: #111827;
+    --accent: #2563eb;
+    --success: #0f766e;
+    --shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
   }
-  body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--surface); color: #0F172A; }
 
-  .mr-nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 48px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100; }
-  .mr-logo { font-family: 'Pretendard', sans-serif; font-weight: 800; font-size: 20px; color: var(--brand-dark); }
-  .mr-logo span { color: var(--brand); }
-  .step-bar { display: flex; align-items: center; gap: 8px; }
-  .pi-step { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94A3B8; font-weight: 500; }
-  .pi-step.done { color: var(--accent); }
-  .pi-step.active { color: var(--brand); }
-  .step-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #E2E8F0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
-  .pi-step.done .step-dot { border-color: var(--accent); background: var(--accent); color: #fff; }
-  .pi-step.active .step-dot { border-color: var(--brand); color: var(--brand); }
-  .step-line { width: 32px; height: 1px; background: #E2E8F0; }
+  body {
+    margin: 0;
+    font-family: 'Noto Sans KR', sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(37,99,235,0.08), transparent 26%),
+      linear-gradient(180deg, #f8fafc 0%, #ffffff 42%, #f8fafc 100%);
+    color: var(--ink);
+  }
 
-  .summary-bar { background: var(--brand-dark); color: #fff; padding: 32px 48px; display: flex; align-items: center; justify-content: space-between; }
-  .summary-left h1 { font-family: 'Pretendard', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-  .summary-left p { font-size: 14px; opacity: 0.65; }
-  .summary-stats { display: flex; gap: 40px; }
-  .s-stat { text-align: center; }
-  .s-num { font-family: 'Pretendard', sans-serif; font-size: 28px; font-weight: 800; }
-  .s-label { font-size: 12px; opacity: 0.6; margin-top: 2px; }
+  .page { min-height: 100vh; }
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255,255,255,0.78);
+    backdrop-filter: blur(14px);
+  }
+  .logo {
+    font-family: 'Manrope', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    cursor: pointer;
+  }
+  .logo span { color: var(--accent); }
+  .nav-note {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .container {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 40px;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .hero-card, .stat-grid, .panel, .result-card {
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+  .hero-card {
+    padding: 30px;
+  }
+  .eyebrow {
+    width: fit-content;
+    border-radius: 999px;
+    background: var(--soft-blue);
+    color: var(--accent);
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 14px;
+  }
+  .hero-card h1 {
+    margin: 0 0 10px;
+    font-family: 'Manrope', sans-serif;
+    font-size: clamp(32px, 5vw, 46px);
+    line-height: 1.06;
+    letter-spacing: -0.05em;
+  }
+  .hero-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .stat-grid {
+    padding: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .stat {
+    border-radius: 20px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(15,23,42,0.05);
+    padding: 16px;
+  }
+  .stat strong {
+    display: block;
+    font-family: 'Manrope', sans-serif;
+    font-size: 30px;
+    margin-bottom: 6px;
+    letter-spacing: -0.05em;
+  }
+  .stat span {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 16px;
+  }
+  .panel {
+    padding: 20px;
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .panel-head h2 {
+    margin: 0 0 6px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 24px;
+    letter-spacing: -0.04em;
+  }
+  .panel-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter {
+    border: 1px solid #dbe3ef;
+    background: white;
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 9px 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .filter.active {
+    background: var(--brand);
+    color: white;
+    border-color: var(--brand);
+  }
+  .result-list {
+    display: grid;
+    gap: 14px;
+  }
+  .result-card {
+    padding: 22px;
+  }
+  .result-card.top {
+    border-color: rgba(37,99,235,0.24);
+  }
+  .badge {
+    display: inline-flex;
+    margin-bottom: 10px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin-bottom: 6px;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .score {
+    min-width: 76px;
+    height: 76px;
+    border-radius: 24px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #111827, #2563eb);
+    color: white;
+    text-align: center;
+  }
+  .score strong {
+    display: block;
+    font-family: 'Manrope', sans-serif;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .score span {
+    font-size: 11px;
+    opacity: 0.82;
+  }
+  .summary {
+    margin: 14px 0;
+    color: #334155;
+    line-height: 1.8;
+    font-size: 14px;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .tag {
+    border-radius: 999px;
+    background: var(--soft);
+    color: #334155;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .tag.primary {
+    background: rgba(15,118,110,0.10);
+    color: #0f766e;
+  }
+  .meters {
+    display: grid;
+    gap: 10px;
+  }
+  .meter-row {
+    display: grid;
+    grid-template-columns: 88px 1fr 40px;
+    gap: 10px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .meter-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #2563eb, #0f766e);
+  }
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+    padding-top: 14px;
+    margin-top: 16px;
+    border-top: 1px solid #edf2f7;
+    flex-wrap: wrap;
+  }
+  .footer-text {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn, .link-btn {
+    border-radius: 14px;
+    padding: 10px 14px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .btn {
+    border: 1px solid #dbe3ef;
+    background: white;
+    color: #334155;
+    cursor: pointer;
+  }
+  .btn.primary {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: white;
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    border: 1px solid #dbe3ef;
+    background: white;
+    color: #334155;
+  }
+  .guide {
+    margin-top: 14px;
+    border-radius: 20px;
+    background: rgba(248,250,252,0.88);
+    border: 1px solid rgba(15,23,42,0.05);
+    padding: 16px;
+  }
+  .guide h3 {
+    margin: 0 0 8px;
+    font-size: 15px;
+  }
+  .guide p {
+    margin: 0 0 10px;
+    color: #334155;
+    line-height: 1.8;
+    font-size: 14px;
+  }
+  .guide ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .mini-grid {
+    display: grid;
+    gap: 12px;
+  }
+  .mini-card {
+    border-radius: 22px;
+    background: rgba(248,250,252,0.88);
+    border: 1px solid rgba(15,23,42,0.05);
+    padding: 18px;
+  }
+  .mini-card h3 {
+    margin: 0 0 10px;
+    font-size: 17px;
+  }
+  .mini-card strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+  .mini-card p, .mini-card span {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .mini-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .loading, .error, .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 56px 20px;
+  }
 
-  .main-wrap { max-width: 1100px; margin: 0 auto; padding: 36px 24px; display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
-
-  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-  .filter-btn { padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid #E2E8F0; background: #fff; color: #475569; font-family: inherit; transition: all 0.15s; }
-  .filter-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
-  .results-label { font-size: 13px; color: #94A3B8; margin-left: auto; }
-
-  .job-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 16px; transition: transform 0.2s; cursor: pointer; }
-  .job-card:hover { transform: translateY(-2px); }
-  .job-card.top { border: 2px solid var(--brand); }
-  .top-badge { display: inline-block; background: var(--brand-light); color: var(--brand); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-bottom: 12px; }
-  .job-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-  .job-logo { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0; }
-  .job-info { flex: 1; margin-left: 12px; }
-  .job-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
-  .job-company { font-size: 13px; color: #64748B; }
-  .score-circle { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-direction: column; flex-shrink: 0; }
-  .score-pct { font-family: 'Pretendard', sans-serif; font-size: 15px; font-weight: 800; line-height: 1; }
-  .score-txt { font-size: 9px; font-weight: 600; margin-top: 1px; }
-  .score-high { background: #ECFDF5; color: #059669; }
-  .score-mid { background: #EFF6FF; color: #2563EB; }
-
-  .job-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-  .j-tag { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
-  .j-tag-blue { background: var(--brand-light); color: #1E40AF; }
-  .j-tag-gray { background: #F1F5F9; color: #475569; }
-  .j-tag-green { background: #ECFDF5; color: #065F46; }
-
-  .skill-bars { margin-bottom: 14px; }
-  .skill-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-  .skill-name { font-size: 12px; color: #64748B; width: 90px; flex-shrink: 0; }
-  .skill-bg { flex: 1; height: 5px; background: #F1F5F9; border-radius: 999px; overflow: hidden; }
-  .skill-fill { height: 100%; border-radius: 999px; }
-  .skill-pct-txt { font-size: 11px; font-weight: 700; width: 30px; text-align: right; }
-
-  .job-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid #F1F5F9; }
-  .deadline { font-size: 12px; color: #94A3B8; }
-  .guide-btn { background: var(--brand); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.2s; }
-  .guide-btn:hover { background: var(--brand-dark); }
-
-  .sidebar-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
-  .sidebar-title { font-weight: 700; font-size: 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-  .sidebar-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
-
-  .radar-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .radar-item { text-align: center; padding: 12px 8px; background: #FAFBFC; border-radius: 10px; }
-  .radar-score { font-family: 'Pretendard', sans-serif; font-size: 20px; font-weight: 800; color: var(--brand); }
-  .radar-label { font-size: 11px; color: #64748B; margin-top: 2px; }
-
-  .missing-list { display: flex; flex-direction: column; gap: 8px; }
-  .missing-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #FFF7ED; border-radius: 8px; }
-  .missing-name { font-size: 13px; font-weight: 600; color: #92400E; }
-  .missing-lv { font-size: 11px; color: #B45309; background: #FEF3C7; padding: 2px 8px; border-radius: 999px; }
-
-  .trend-list { display: flex; flex-direction: column; gap: 8px; }
-  .trend-item { display: flex; align-items: center; gap: 10px; }
-  .trend-rank { font-size: 12px; font-weight: 700; color: #94A3B8; width: 16px; }
-  .trend-name { font-size: 13px; font-weight: 600; flex: 1; }
-  .trend-bar-bg { width: 64px; height: 5px; background: #F1F5F9; border-radius: 999px; overflow: hidden; }
-  .trend-bar-fill { height: 100%; background: var(--brand); border-radius: 999px; }
-
-  .bottom-bar { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; align-items: center; }
-  .btn-back { background: transparent; border: 1.5px solid #E2E8F0; color: #374151; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; }
-  .btn-back:hover { border-color: var(--brand); color: var(--brand); }
+  @media (max-width: 960px) {
+    .nav {
+      padding: 16px 18px;
+    }
+    .container {
+      width: min(100%, calc(100% - 24px));
+    }
+    .hero, .layout {
+      grid-template-columns: 1fr;
+    }
+    .stat-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 `;
 
-const FILTERS = ["전체", "90% 이상", "대기업", "스타트업", "재택 가능"];
-
-const JOBS = [
-  {
-    top: true,
-    logoBg: "#FEE500", logoColor: "#000", logoText: "카카오",
-    title: "백엔드 개발자 (AI플랫폼팀)",
-    company: "카카오 · 판교 · 정규직",
-    score: 92, scoreClass: "score-high",
-    tags: [
-      { label: "✓ 자격요건 충족", cls: "j-tag-green" },
-      { label: "Python", cls: "j-tag-blue" },
-      { label: "FastAPI", cls: "j-tag-blue" },
-      { label: "LangChain", cls: "j-tag-blue" },
-      { label: "우대 4/6", cls: "j-tag-gray" },
-    ],
-    skills: [
-      { name: "기술 스택", pct: 95, color: "#10B981", textColor: "#059669" },
-      { name: "직무 경험", pct: 88, color: "#2563EB", textColor: "#2563EB" },
-      { name: "우대사항",  pct: 72, color: "#7C3AED", textColor: "#7C3AED" },
-    ],
-    deadline: "마감 D-12 · 연봉 5,000~7,000만",
-  },
-  {
-    logoBg: "#03C75A", logoColor: "#fff", logoText: "네이버",
-    title: "서버 개발자 (클로바)",
-    company: "네이버 · 성남 · 정규직",
-    score: 87, scoreClass: "score-high",
-    tags: [
-      { label: "✓ 자격요건 충족", cls: "j-tag-green" },
-      { label: "Python", cls: "j-tag-blue" },
-      { label: "LLM", cls: "j-tag-blue" },
-      { label: "우대 3/5", cls: "j-tag-gray" },
-    ],
-    skills: [
-      { name: "기술 스택", pct: 90, color: "#10B981", textColor: "#059669" },
-      { name: "직무 경험", pct: 82, color: "#2563EB", textColor: "#2563EB" },
-    ],
-    deadline: "마감 D-5 · 연봉 협의",
-  },
-  {
-    logoBg: "#5F2EEA", logoColor: "#fff", logoText: "토스",
-    title: "백엔드 엔지니어 (AI팀)",
-    company: "토스 · 서울 · 정규직",
-    score: 79, scoreClass: "score-mid",
-    tags: [
-      { label: "Kotlin 경험 필요", cls: "j-tag-gray" },
-      { label: "Python", cls: "j-tag-blue" },
-      { label: "pgvector", cls: "j-tag-blue" },
-      { label: "우대 2/5", cls: "j-tag-gray" },
-    ],
-    skills: [
-      { name: "기술 스택", pct: 78, color: "#2563EB", textColor: "#2563EB" },
-      { name: "직무 경험", pct: 80, color: "#2563EB", textColor: "#2563EB" },
-    ],
-    deadline: "마감 D-20 · 연봉 6,000만+",
-  },
+const filters = [
+  { key: "all", label: "전체" },
+  { key: "국민내일배움카드 훈련과정", label: "내일배움카드" },
+  { key: "일학습병행훈련과정", label: "일학습병행" },
+  { key: "구직자취업역량 강화프로그램", label: "취업역량" },
 ];
 
-const RADAR = [
-  { score: "95%", label: "기술 스택", color: "#2563EB" },
-  { score: "82%", label: "프로젝트",  color: "#2563EB" },
-  { score: "70%", label: "우대사항",  color: "#7C3AED" },
-  { score: "58%", label: "자격증",    color: "#F59E0B" },
-];
+function programTypeLabel(category) {
+  return category || "추천 프로그램";
+}
 
-const MISSING = [
-  { name: "Kotlin",     lv: "기업 요구 높음" },
-  { name: "Kubernetes", lv: "우대사항 다수" },
-  { name: "AWS",        lv: "우대사항 다수" },
-];
+function programAction(program) {
+  return {
+    href: program.url || "https://www.work24.go.kr",
+    label: program.url ? "프로그램 보러가기" : "고용24 이동",
+  };
+}
 
-const TRENDS = [
-  { rank: 1, name: "LangChain",  pct: 90 },
-  { rank: 2, name: "RAG",        pct: 80 },
-  { rank: 3, name: "FastAPI",    pct: 70 },
-  { rank: 4, name: "pgvector",   pct: 55 },
-  { rank: 5, name: "Kubernetes", pct: 45 },
-];
+function ProgramCard({ item, isTop, loadingGuideId, onGuideClick }) {
+  const action = programAction(item.program);
 
-function JobCard({ job }) {
   return (
-    <div className={`job-card${job.top ? " top" : ""}`}>
-      {job.top && <div className="top-badge">최고 매칭</div>}
-      <div className="job-header">
-        <div className="job-logo" style={{ background: job.logoBg, color: job.logoColor }}>{job.logoText}</div>
-        <div className="job-info">
-          <div className="job-title">{job.title}</div>
-          <div className="job-company">{job.company}</div>
-        </div>
-        <div className={`score-circle ${job.scoreClass}`}>
-          <div className="score-pct">{job.score}%</div>
-          <div className="score-txt">적합도</div>
-        </div>
-      </div>
-      <div className="job-tags">
-        {job.tags.map((t, i) => <span key={i} className={`j-tag ${t.cls}`}>{t.label}</span>)}
-      </div>
-      <div className="skill-bars">
-        {job.skills.map((s, i) => (
-          <div className="skill-row" key={i}>
-            <span className="skill-name">{s.name}</span>
-            <div className="skill-bg"><div className="skill-fill" style={{ width: `${s.pct}%`, background: s.color }} /></div>
-            <span className="skill-pct-txt" style={{ color: s.textColor }}>{s.pct}%</span>
+    <article className={`result-card${isTop ? " top" : ""}`}>
+      {isTop && <div className="badge">가장 잘 맞는 추천</div>}
+      <div className="row">
+        <div>
+          <div className="title">{item.program.title}</div>
+          <div className="meta">
+            {item.program.provider || "운영기관 정보 없음"} · {item.program.location || "위치 정보 없음"}
+            <br />
+            {programTypeLabel(item.program.category)} · {item.program.schedule || "일정 정보 없음"}
           </div>
+        </div>
+        <div className="score">
+          <div>
+            <strong>{Math.round(item.score)}</strong>
+            <span>적합도</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="summary">{item.program.summary}</p>
+
+      <div className="tags">
+        <span className="tag primary">{item.program.program_type}</span>
+        {(item.program.tags || []).slice(0, 4).map((tag) => (
+          <span className="tag" key={tag}>
+            {tag}
+          </span>
         ))}
       </div>
-      <div className="job-footer">
-        <span className="deadline">{job.deadline}</span>
-        <button className="guide-btn">자소서 가이드 보기 →</button>
+
+      <div className="meters">
+        <div className="meter-row">
+          <span>기술 적합</span>
+          <div className="meter-bar"><div className="meter-fill" style={{ width: `${item.skill_score}%` }} /></div>
+          <strong>{Math.round(item.skill_score)}</strong>
+        </div>
+        <div className="meter-row">
+          <span>성장 효과</span>
+          <div className="meter-bar"><div className="meter-fill" style={{ width: `${item.growth_score}%` }} /></div>
+          <strong>{Math.round(item.growth_score)}</strong>
+        </div>
+        <div className="meter-row">
+          <span>준비도</span>
+          <div className="meter-bar"><div className="meter-fill" style={{ width: `${item.fit_score}%` }} /></div>
+          <strong>{Math.round(item.fit_score)}</strong>
+        </div>
       </div>
-    </div>
+
+      <div className="footer">
+        <div className="footer-text">
+          대상: {item.program.target_audience || "정보 없음"}
+          <br />
+          비용: {item.program.tuition || "정보 없음"}
+        </div>
+        <div className="actions">
+          <a className="link-btn" href={action.href} target="_blank" rel="noreferrer">
+            {action.label}
+          </a>
+          <button className="btn primary" onClick={() => onGuideClick(item.id)} disabled={loadingGuideId === item.id}>
+            {loadingGuideId === item.id ? "생성 중..." : "추천 이유 보기"}
+          </button>
+        </div>
+      </div>
+
+      {item.guide && (
+        <div className="guide">
+          <h3>추천 이유와 준비 로드맵</h3>
+          <p>{item.guide}</p>
+          {item.questions?.length > 0 && (
+            <ul>
+              {item.questions.map((question) => (
+                <li key={question}>{question}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 
 export default function MatchResult() {
   const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState("전체");
+  const location = useLocation();
+  const portfolioId = location.state?.portfolioId;
+
+  const [filter, setFilter] = useState("all");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingGuideId, setLoadingGuideId] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!portfolioId) {
+      setLoading(false);
+      setError("포트폴리오 정보가 없어 다시 입력이 필요합니다.");
+      return;
+    }
+
+    const runMatch = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await fetch(`${API_BASE}/api/match/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ portfolio_id: portfolioId }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || data.error || "추천 결과를 불러오지 못했습니다.");
+        }
+        setResults(data.results || []);
+      } catch (err) {
+        setError(err.message || "추천 결과를 불러오는 중 오류가 발생했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    runMatch();
+  }, [portfolioId]);
+
+  const filteredResults =
+    filter === "all" ? results : results.filter((item) => item.program.category === filter);
+
+  const topResult = filteredResults[0];
+  const recommendedTags = [...new Set(filteredResults.flatMap((item) => item.program.tags || []))].slice(0, 6);
+  const capabilityPrograms = filteredResults
+    .filter((item) => item.program.category === "구직자취업역량 강화프로그램")
+    .slice(0, 3);
+
+  const handleGuideClick = async (matchId) => {
+    setLoadingGuideId(matchId);
+    try {
+      const response = await fetch(`${API_BASE}/api/match/${matchId}/guide`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "가이드를 생성하지 못했습니다.");
+      }
+
+      setResults((current) =>
+        current.map((item) =>
+          item.id === matchId
+            ? { ...item, guide: data.guide, questions: data.questions || [] }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setError(err.message || "가이드 생성 중 오류가 발생했습니다.");
+    } finally {
+      setLoadingGuideId(null);
+    }
+  };
 
   return (
-    <>
+    <div className="page">
       <style>{styles}</style>
 
-      <nav className="mr-nav">
-        <div className="mr-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>Career<span>Match</span></div>
-        <div className="step-bar">
-          <div className="pi-step done"><div className="step-dot">✓</div>기본정보</div>
-          <div className="step-line" />
-          <div className="pi-step done"><div className="step-dot">✓</div>포트폴리오</div>
-          <div className="step-line" />
-          <div className="pi-step active"><div className="step-dot">3</div>매칭결과</div>
+      <nav className="nav">
+        <div className="logo" onClick={() => navigate("/")}>
+          Career<span>Match</span>
         </div>
+        <div className="nav-note">추천 결과는 입력한 준비 상태를 기반으로 정렬됩니다.</div>
       </nav>
 
-      <div className="summary-bar">
-        <div className="summary-left">
-          <h1>AI 매칭 결과 — 백엔드 개발자</h1>
-          <p>포트폴리오 분석 완료 · 총 12,483개 공고 중 최적 매칭 추출</p>
-        </div>
-        <div className="summary-stats">
-          <div className="s-stat"><div className="s-num">247</div><div className="s-label">매칭 공고</div></div>
-          <div className="s-stat"><div className="s-num">92%</div><div className="s-label">최고 적합도</div></div>
-          <div className="s-stat"><div className="s-num">18</div><div className="s-label">자격요건 충족</div></div>
-        </div>
-      </div>
-
-      <div className="main-wrap">
-        <div>
-          <div className="filter-bar">
-            {FILTERS.map((f) => (
-              <button key={f} className={`filter-btn${activeFilter === f ? " active" : ""}`} onClick={() => setActiveFilter(f)}>{f}</button>
-            ))}
-            <span className="results-label">247개 결과</span>
+      <main className="container">
+        <section className="hero">
+          <div className="hero-card">
+            <div className="eyebrow">Recommendation Results</div>
+            <h1>지금 단계에 맞는 프로그램을 바로 비교해보세요.</h1>
+            <p>입력한 정보 기준으로 추천을 정렬했고, 필요하면 이유와 준비 포인트까지 펼쳐볼 수 있습니다.</p>
           </div>
-          {JOBS.map((job, i) => <JobCard key={i} job={job} />)}
-        </div>
-
-        <div>
-          <div className="sidebar-card">
-            <div className="sidebar-title">
-              <div className="sidebar-icon" style={{ background: "#EFF6FF" }}>📊</div>
-              역량 분석
+          <div className="stat-grid">
+            <div className="stat">
+              <strong>{results.length || 0}</strong>
+              <span>추천 프로그램 수</span>
             </div>
-            <div className="radar-wrap">
-              {RADAR.map((r, i) => (
-                <div className="radar-item" key={i}>
-                  <div className="radar-score" style={{ color: r.color }}>{r.score}</div>
-                  <div className="radar-label">{r.label}</div>
+            <div className="stat">
+              <strong>{topResult ? `${Math.round(topResult.score)}점` : "-"}</strong>
+              <span>최고 적합도</span>
+            </div>
+            <div className="stat">
+              <strong>{topResult ? programTypeLabel(topResult.program.category) : "-"}</strong>
+              <span>우선 추천 유형</span>
+            </div>
+            <div className="stat">
+              <strong>{recommendedTags[0] || "-"}</strong>
+              <span>가장 많이 보인 키워드</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="layout">
+          <div className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>추천 프로그램</h2>
+                <p>필터를 바꿔가며 유형별로 비교할 수 있습니다.</p>
+              </div>
+              <div className="filters">
+                {filters.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`filter${filter === item.key ? " active" : ""}`}
+                    onClick={() => setFilter(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loading && <div className="loading">추천 결과를 불러오는 중입니다...</div>}
+            {!loading && error && <div className="error">{error}</div>}
+            {!loading && !error && filteredResults.length === 0 && (
+              <div className="empty">조건에 맞는 추천 결과가 없습니다.</div>
+            )}
+
+            {!loading && !error && filteredResults.length > 0 && (
+              <div className="result-list">
+                {filteredResults.map((item, index) => (
+                  <ProgramCard
+                    key={item.id}
+                    item={item}
+                    isTop={index === 0}
+                    loadingGuideId={loadingGuideId}
+                    onGuideClick={handleGuideClick}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <aside className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>보조 정보</h2>
+                <p>결과를 빠르게 읽을 수 있도록 핵심만 모았습니다.</p>
+              </div>
+            </div>
+            <div className="mini-grid">
+              <div className="mini-card">
+                <h3>추천 키워드</h3>
+                <div className="tags">
+                  {recommendedTags.length > 0 ? (
+                    recommendedTags.map((tag) => (
+                      <span className="tag" key={tag}>
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span>아직 추출된 키워드가 없습니다.</span>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          <div className="sidebar-card">
-            <div className="sidebar-title">
-              <div className="sidebar-icon" style={{ background: "#FFF7ED" }}>⚠️</div>
-              보완 추천 스킬
-            </div>
-            <div className="missing-list">
-              {MISSING.map((m, i) => (
-                <div className="missing-item" key={i}>
-                  <span className="missing-name">{m.name}</span>
-                  <span className="missing-lv">{m.lv}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+              <div className="mini-card">
+                <h3>취업역량 프로그램</h3>
+                {capabilityPrograms.length > 0 ? (
+                  capabilityPrograms.map((item) => (
+                    <div key={item.id} style={{ marginBottom: "12px" }}>
+                      <strong>{item.program.title}</strong>
+                      <span>{item.program.summary}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span>현재 필터 기준으로 취업역량 프로그램이 없습니다.</span>
+                )}
+              </div>
 
-          <div className="sidebar-card">
-            <div className="sidebar-title">
-              <div className="sidebar-icon" style={{ background: "#ECFDF5" }}>📈</div>
-              인기 기술 트렌드
+              <div className="mini-card">
+                <h3>다음 액션</h3>
+                <p>상세 페이지를 본 뒤 추천 이유를 열어보면 우선순위를 훨씬 쉽게 정할 수 있습니다.</p>
+              </div>
             </div>
-            <div className="trend-list">
-              {TRENDS.map((t) => (
-                <div className="trend-item" key={t.rank}>
-                  <span className="trend-rank">{t.rank}</span>
-                  <span className="trend-name">{t.name}</span>
-                  <div className="trend-bar-bg"><div className="trend-bar-fill" style={{ width: `${t.pct}%` }} /></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bottom-bar">
-        <button className="btn-back" onClick={() => navigate('/portfolio')}>← 이전</button>
-      </div>
-    </>
+          </aside>
+        </section>
+      </main>
+    </div>
   );
 }
